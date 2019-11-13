@@ -417,4 +417,134 @@ if (!function_exists('_addLogoToImage')) {
     }
 }
 
+/**
+ * Generate Thumbnails
+ *
+ * @param $from
+ * @param $to
+ * @param null $width_thumbnail
+ * @param null $height_thumbnail
+ * @param null $ratio
+ * @return bool|null
+ */
+if (!function_exists('_makeThumbnails')) {
+    function _makeThumbnails($from, $to, $width_thumbnail = null, $height_thumbnail = null, $ratio = null, $new_if_exists = false)
+    {
+        //check if path not exists || not readable
+        if (!file_exists($from) || !is_readable($from)) return null;
+
+        //images on dir or one image path
+        $images = is_dir($from) ? new FilesystemIterator($from) : [new SplFileInfo($from)];
+
+        //check dist directory create it if not exists
+        if (!is_dir($to)) mkdir($to, 0777, true);
+
+        //handle images
+        foreach ($images as $image) {
+            $extension = $image->getExtension() == 'jpg' ? 'jpeg' : $image->getExtension(); //get image extension
+            $new_image_path = $to . DIRECTORY_SEPARATOR . $image->getFilename();
+            //check if this image is exist
+            if ($new_if_exists === false) {
+                if (file_exists($new_image_path)) {
+                    continue;
+                }
+            }
+            $createResource = "imagecreatefrom$extension"; //create resource function name
+            $outputImage = "image$extension"; //create output image function name
+            if (!function_exists($createResource)) continue;
+            if (!function_exists($outputImage)) continue;
+            $resource = $createResource($image); //create image resource
+
+            // get original image width and height
+            $width = imagesx($resource);
+            $height = imagesy($resource);
+
+            if ($ratio != null && is_numeric($ratio)) {
+                if ($ratio > 1) $ratio = $ratio / 100;
+                $height_thumbnail = $height * $ratio;
+                $width_thumbnail = $width * $ratio;
+            }
+
+            //get image type
+            $type = exif_imagetype($image->getRealPath());
+
+            // create duplicate image based on calculated target size
+            $thumbnail = imagecreatetruecolor($width_thumbnail, $height_thumbnail);
+
+            // set transparency options for GIFs and PNGs
+            if ($type == IMAGETYPE_GIF || $type == IMAGETYPE_PNG) {
+
+                // make image transparent
+                imagecolortransparent(
+                    $thumbnail,
+                    imagecolorallocate($thumbnail, 0, 0, 0)
+                );
+
+                // additional settings for PNGs
+                if ($type == IMAGETYPE_PNG) {
+                    imagealphablending($thumbnail, false);
+                    imagesavealpha($thumbnail, true);
+                }
+            }
+
+            // copy entire source image to duplicate image and resize
+            imagecopyresampled(
+                $thumbnail,
+                $resource,
+                0, 0, 0, 0,
+                $width_thumbnail, $height_thumbnail,
+                $width, $height
+            );
+
+            //save the duplicate version of the image to disk
+            $outputImage($thumbnail, $new_image_path);
+
+            //destroy resources
+            imagedestroy($resource);
+            imagedestroy($thumbnail);
+        }
+        return true;
+    }
+}
+
+/**
+ * Create Date Form Format || Check Validate Date
+ *
+ * @param $date
+ * @param $format
+ * @return null || object
+ */
+if (!function_exists('_createDateFromFormat')) {
+    function _createDateFromFormat($date, $format = 'Y-m-d')
+    {
+        return DateTime::createFromFormat($format, $date);
+    }
+}
+
+/**
+ * Send SMS by Nexmo
+ * 
+ * @param $phone  //country code + phone number 
+ * @param $msg
+ */
+if (!function_exists('_sendSmsByNexmo')) {
+    function _sendSmsByNexmo($phone, $msg = null)
+    {
+        $Nexmo_API_KEY = env('Nexmo_API_KEY') || '87ebfaf4';
+        $Nexmo_API_SECRET = env('Nexmo_API_SECRET') || 'GUcMSIAVjU101M3l';
+
+        $basic  = new \Nexmo\Client\Credentials\Basic($Nexmo_API_KEY, $Nexmo_API_SECRET);
+        $client = new \Nexmo\Client($basic);
+        try {
+            $message = $client->message()->send([
+                'to' => $phone,
+                'from' => config('app.name'),
+                'text' => $msg
+            ]);
+        }catch (\Exception $exception) {
+            return $exception->getMessage();
+        }
+    }
+}
+
 ?>
